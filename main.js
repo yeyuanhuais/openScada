@@ -4,6 +4,7 @@ const fs = require("fs/promises");
 const { spawn } = require("child_process");
 
 const EXECUTABLE_NAME = "scada.develop.exe";
+const PREFIXES = ["Scada", "Neutral", "JSCC"];
 
 const extractVersionFromPath = (targetPath) => {
   const segments = targetPath.split(path.sep);
@@ -25,6 +26,15 @@ const groupFromVersion = (version) => {
     return "其他";
   }
   return `${parts[0]}.${parts[1]}`;
+};
+
+const detectPrefix = (value) => {
+  if (!value) {
+    return "其他";
+  }
+  const normalized = value.toLowerCase();
+  const matched = PREFIXES.find((prefix) => normalized.includes(prefix.toLowerCase()));
+  return matched || "其他";
 };
 
 const findExecutableInDir = async (rootDir) => {
@@ -65,11 +75,13 @@ const scanRoot = async (rootDir) => {
     }
     const version = extractVersionFromPath(exePath) || extractVersionFromPath(entryPath);
     const group = groupFromVersion(version);
+    const prefix = detectPrefix(`${entry.name} ${exePath}`);
     const label = version || entry.name;
     const item = {
       label,
       version,
       group,
+      prefix,
       exePath
     };
     if (!groups.has(group)) {
