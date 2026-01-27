@@ -1,2 +1,5 @@
 
 node_modules/
+dist/*
+# 但保留这个 exe 文件
+!dist/openScada*.exe

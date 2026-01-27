@@ -4,9 +4,22 @@
   "description": "OpenScada launcher",
   "main": "main.js",
   "scripts": {
-    "start": "electron ."
+    "start": "electron .",
+    "build:win": "electron-builder --win portable"
   },
   "devDependencies": {
-    "electron": "^30.0.0"
+    "electron": "^30.0.0",
+    "electron-builder": "^24.13.3"
+  },
+  "build": {
+    "appId": "com.example.openScada",
+    "productName": "openScada",
+    "win": {
+      "target": "portable",
+      "icon": "icon.ico"
+    },
+    "files": [
+      "**/*"
+    ]
   }
 }

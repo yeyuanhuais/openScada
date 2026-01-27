@@ -4,9 +4,9 @@ const fs = require("fs/promises");
 const { spawn } = require("child_process");
 
 const EXECUTABLE_NAME = "scada.develop.exe";
-const PREFIXES = ["Scada", "Neutral", "JSCC"];
+const PREFIXES = ["Scada", "Neutral", "JSCC", "Debug"];
 
-const extractVersionFromPath = (targetPath) => {
+const extractVersionFromPath = targetPath => {
   const segments = targetPath.split(path.sep);
   for (const segment of segments) {
     const match = segment.match(/v?(\d+\.\d+\.\d+\.\d+)/i);
@@ -17,7 +17,7 @@ const extractVersionFromPath = (targetPath) => {
   return null;
 };
 
-const groupFromVersion = (version) => {
+const groupFromVersion = version => {
   if (!version) {
     return "其他";
   }
@@ -28,16 +28,17 @@ const groupFromVersion = (version) => {
   return `${parts[0]}.${parts[1]}`;
 };
 
-const detectPrefix = (value) => {
+const detectPrefix = value => {
   if (!value) {
     return "其他";
   }
-  const normalized = value.toLowerCase();
-  const matched = PREFIXES.find((prefix) => normalized.includes(prefix.toLowerCase()));
-  return matched || "其他";
+  const classType = PREFIXES.join("|");
+  const reg = new RegExp("^(" + classType + ")");
+  const m = reg.exec(value);
+  return m[1] || "其他";
 };
 
-const findExecutableInDir = async (rootDir) => {
+const findExecutableInDir = async rootDir => {
   const stack = [rootDir];
   while (stack.length) {
     const current = stack.pop();
@@ -61,7 +62,7 @@ const findExecutableInDir = async (rootDir) => {
   return null;
 };
 
-const scanRoot = async (rootDir) => {
+const scanRoot = async rootDir => {
   const groups = new Map();
   const entries = await fs.readdir(rootDir, { withFileTypes: true });
   for (const entry of entries) {
@@ -75,14 +76,14 @@ const scanRoot = async (rootDir) => {
     }
     const version = extractVersionFromPath(exePath) || extractVersionFromPath(entryPath);
     const group = groupFromVersion(version);
-    const prefix = detectPrefix(`${entry.name} ${exePath}`);
+    const prefix = detectPrefix(`${entry.name}`);
     const label = version || entry.name;
     const item = {
       label,
       version,
       group,
       prefix,
-      exePath
+      exePath,
     };
     if (!groups.has(group)) {
       groups.set(group, []);
@@ -93,7 +94,7 @@ const scanRoot = async (rootDir) => {
   const sortedGroups = Array.from(groups.entries())
     .map(([group, items]) => ({
       group,
-      items: items.sort((a, b) => a.label.localeCompare(b.label, "zh-CN"))
+      items: items.sort((a, b) => a.label.localeCompare(b.label, "zh-CN")),
     }))
     .sort((a, b) => a.group.localeCompare(b.group, "zh-CN"));
 
@@ -104,9 +105,10 @@ const createWindow = () => {
   const win = new BrowserWindow({
     width: 720,
     height: 520,
+    icon: path.join(__dirname, "icon.ico"),
     webPreferences: {
-      preload: path.join(__dirname, "preload.js")
-    }
+      preload: path.join(__dirname, "preload.js"),
+    },
   });
 
   win.setMenuBarVisibility(false);
@@ -131,7 +133,7 @@ app.on("window-all-closed", () => {
 
 ipcMain.handle("select-root", async () => {
   const result = await dialog.showOpenDialog({
-    properties: ["openDirectory"]
+    properties: ["openDirectory"],
   });
   if (result.canceled || result.filePaths.length === 0) {
     return null;
@@ -155,12 +157,12 @@ ipcMain.handle("launch-exe", async (_event, exePath) => {
       spawn("cmd", ["/c", "start", "", exePath], {
         detached: true,
         stdio: "ignore",
-        windowsHide: true
+        windowsHide: true,
       }).unref();
     } else {
       spawn(exePath, [], {
         detached: true,
-        stdio: "ignore"
+        stdio: "ignore",
       }).unref();
     }
     return true;
