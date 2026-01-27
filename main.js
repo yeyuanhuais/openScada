@@ -126,20 +126,32 @@ ipcMain.handle("select-root", async () => {
   return result.filePaths[0];
 });
 
+ipcMain.handle("default-root", async () => process.cwd());
+
 ipcMain.handle("scan-root", async (_event, rootDir) => {
-  if (!rootDir) {
-    return [];
-  }
-  return scanRoot(rootDir);
+  const targetRoot = rootDir || process.cwd();
+  return scanRoot(targetRoot);
 });
 
 ipcMain.handle("launch-exe", async (_event, exePath) => {
   if (!exePath) {
     return false;
   }
-  spawn(exePath, [], {
-    detached: true,
-    stdio: "ignore"
-  }).unref();
-  return true;
+  try {
+    if (process.platform === "win32") {
+      spawn("cmd", ["/c", "start", "", exePath], {
+        detached: true,
+        stdio: "ignore",
+        windowsHide: true
+      }).unref();
+    } else {
+      spawn(exePath, [], {
+        detached: true,
+        stdio: "ignore"
+      }).unref();
+    }
+    return true;
+  } catch (error) {
+    return false;
+  }
 });

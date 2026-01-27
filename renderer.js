@@ -72,11 +72,8 @@ const renderVersions = () => {
 
 const refreshData = async () => {
   if (!currentRoot) {
-    groupedData = [];
-    selectedGroups = new Set();
-    renderGroups();
-    renderVersions();
-    return;
+    currentRoot = await window.scadaApi.defaultRoot();
+    rootPathEl.textContent = currentRoot;
   }
   groupedData = await window.scadaApi.scanRoot(currentRoot);
   selectedGroups = new Set(groupedData.map((group) => group.group));
