@@ -141,7 +141,12 @@ ipcMain.handle("select-root", async () => {
   return result.filePaths[0];
 });
 
-ipcMain.handle("default-root", async () => process.cwd());
+ipcMain.handle("default-root", async () => {
+  if (process.env.PORTABLE_EXECUTABLE_DIR) {
+    return process.env.PORTABLE_EXECUTABLE_DIR;
+  }
+  return path.dirname(app.getPath("exe"));
+});
 
 ipcMain.handle("scan-root", async (_event, rootDir) => {
   const targetRoot = rootDir || process.cwd();
