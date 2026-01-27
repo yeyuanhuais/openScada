@@ -67,7 +67,7 @@ button.ghost {
 .version-list {
   display: flex;
   flex-wrap: wrap;
-  gap: 12px;
+  gap: 10px;
 }
 
 .version-item {
