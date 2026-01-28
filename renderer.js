@@ -20,6 +20,7 @@ let groupedData = [];
 let selectedGroups = new Set();
 let selectedPrefixes = new Set();
 let searchKeyword = "";
+let selectedTargetPrefix = null;
 
 const DEFAULT_SOURCE_FOLDER = "\\\\192.168.11.3\\xxx\\xxx\\xxx\\3-固件打包\\v3.38\\feature\\HMIS-10657-趋势图改原生\\3.38.10657.22";
 const DEFAULT_VERSION = "3.39.10657.1";
@@ -172,6 +173,7 @@ const renderVersions = () => {
     selectButton.addEventListener("click", () => {
       const targetVersion = item.version || item.label;
       versionInput.value = targetVersion;
+      selectedTargetPrefix = item.prefix || null;
       replaceStatusEl.textContent = `已选择目标版本：${targetVersion}`;
       replaceStatusEl.classList.remove("error");
       setActiveTab("replace");
@@ -236,6 +238,7 @@ tabs.forEach(tab => {
 
 sourceFolderInput.value = DEFAULT_SOURCE_FOLDER;
 versionInput.value = DEFAULT_VERSION;
+selectedTargetPrefix = null;
 
 sourceBrowseButton.addEventListener("click", async () => {
   const selected = await electronAPI.selectFolder();
@@ -256,11 +259,22 @@ runReplaceButton.addEventListener("click", async () => {
   runReplaceButton.disabled = true;
   renderReplaceLogs([]);
 
-  const result = await electronAPI.replaceFirmwareFiles({ sourceFolder, version });
-  replaceStatusEl.textContent = result.message || (result.success ? "执行完成" : "执行失败");
-  replaceStatusEl.classList.toggle("error", !result.success);
-  renderReplaceLogs(result.logs || []);
-  runReplaceButton.disabled = false;
+  try {
+    const result = await electronAPI.replaceFirmwareFiles({
+      sourceFolder,
+      version,
+      targetPrefix: selectedTargetPrefix
+    });
+    replaceStatusEl.textContent = result.message || (result.success ? "执行完成" : "执行失败");
+    replaceStatusEl.classList.toggle("error", !result.success);
+    renderReplaceLogs(result.logs || []);
+  } catch (error) {
+    replaceStatusEl.textContent = "执行失败";
+    replaceStatusEl.classList.add("error");
+    renderReplaceLogs([`执行失败: ${error.message}`]);
+  } finally {
+    runReplaceButton.disabled = false;
+  }
 });
 
 refreshData();

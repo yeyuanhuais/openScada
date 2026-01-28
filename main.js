@@ -69,6 +69,36 @@ const detectPrefix = value => {
   return m[1] || "其他";
 };
 
+const normalizePrefix = prefix => {
+  if (!prefix) {
+    return null;
+  }
+  const match = PREFIXES.find(item => item.toLowerCase() === String(prefix).toLowerCase());
+  return match || null;
+};
+
+const parseTargetVersion = (rawVersion, rawPrefix) => {
+  const normalizedPrefix = normalizePrefix(rawPrefix);
+  if (!rawVersion) {
+    return {
+      version: null,
+      prefix: normalizedPrefix
+    };
+  }
+  const prefixGroup = PREFIXES.join("|");
+  const versionMatch = String(rawVersion).trim().match(new RegExp(`^(?:(${prefixGroup})[\\s-_]*)?v?(\\d+\\.\\d+\\.\\d+\\.\\d+)$`, "i"));
+  if (versionMatch) {
+    return {
+      prefix: normalizePrefix(versionMatch[1]) || normalizedPrefix,
+      version: versionMatch[2]
+    };
+  }
+  return {
+    version: String(rawVersion).trim(),
+    prefix: normalizedPrefix
+  };
+};
+
 const findExecutableInDir = async rootDir => {
   const stack = [rootDir];
   while (stack.length) {
@@ -226,11 +256,14 @@ const toTargetFolder = (baseFolder, relativeFolder) =>
 
 ipcMain.handle("replace-firmware-files", async (_event, payload) => {
   const sourceFolder = payload?.sourceFolder?.trim() || DEFAULT_SOURCE_FOLDER;
-  const version = payload?.version?.trim() || DEFAULT_VERSION;
-  const baseFolder = `D:\\sacda组态\\Scada-v${version}\\HaiwellDir\\firmware`;
+  const parsedTarget = parseTargetVersion(payload?.version?.trim() || DEFAULT_VERSION, payload?.targetPrefix);
+  const version = parsedTarget.version || DEFAULT_VERSION;
+  const prefix = parsedTarget.prefix || "Scada";
+  const baseFolder = `D:\\sacda组态\\${prefix}-v${version}\\HaiwellDir\\firmware`;
   const logs = [
     `源文件夹: ${sourceFolder}`,
     `目标版本: ${version}`,
+    `目标类型: ${prefix}`,
     `目标路径: ${baseFolder}`
   ];
   let copiedFiles = 0;
@@ -254,56 +287,65 @@ ipcMain.handle("replace-firmware-files", async (_event, payload) => {
     };
   }
 
-  for (const folder of REPLACE_FOLDERS) {
-    const targetFolder = toTargetFolder(baseFolder, folder);
-    try {
-      await ensureFolder(targetFolder);
-      const entries = await fs.readdir(targetFolder, { withFileTypes: true });
-      for (const entry of entries) {
-        if (!entry.isFile()) {
-          continue;
-        }
-        const filePath = path.join(targetFolder, entry.name);
-        await fs.rm(filePath, { force: true });
-        cleanedFiles += 1;
-      }
-      logs.push(`清理完成: ${targetFolder}`);
-    } catch (error) {
-      logs.push(`清理失败: ${targetFolder} (${error.message})`);
-    }
-  }
-
-  const sourceEntries = await fs.readdir(sourceFolder, { withFileTypes: true });
-  for (const entry of sourceEntries) {
-    if (!entry.isFile()) {
-      continue;
-    }
-    const fileName = entry.name;
-    const sourcePath = path.join(sourceFolder, fileName);
-    for (const pattern of REPLACE_PATTERNS) {
-      if (!pattern.regex.test(fileName)) {
-        continue;
-      }
-      matchedFiles += 1;
-      const targetFolder = toTargetFolder(baseFolder, pattern.target);
+  try {
+    for (const folder of REPLACE_FOLDERS) {
+      const targetFolder = toTargetFolder(baseFolder, folder);
       try {
         await ensureFolder(targetFolder);
-        await fs.copyFile(sourcePath, path.join(targetFolder, fileName));
-        copiedFiles += 1;
-        logs.push(`复制 ${fileName} -> ${targetFolder}`);
+        const entries = await fs.readdir(targetFolder, { withFileTypes: true });
+        for (const entry of entries) {
+          if (!entry.isFile()) {
+            continue;
+          }
+          const filePath = path.join(targetFolder, entry.name);
+          await fs.rm(filePath, { force: true });
+          cleanedFiles += 1;
+        }
+        logs.push(`清理完成: ${targetFolder}`);
       } catch (error) {
-        logs.push(`复制失败 ${fileName} -> ${targetFolder} (${error.message})`);
+        logs.push(`清理失败: ${targetFolder} (${error.message})`);
       }
     }
+
+    const sourceEntries = await fs.readdir(sourceFolder, { withFileTypes: true });
+    for (const entry of sourceEntries) {
+      if (!entry.isFile()) {
+        continue;
+      }
+      const fileName = entry.name;
+      const sourcePath = path.join(sourceFolder, fileName);
+      for (const pattern of REPLACE_PATTERNS) {
+        if (!pattern.regex.test(fileName)) {
+          continue;
+        }
+        matchedFiles += 1;
+        const targetFolder = toTargetFolder(baseFolder, pattern.target);
+        try {
+          await ensureFolder(targetFolder);
+          await fs.copyFile(sourcePath, path.join(targetFolder, fileName));
+          copiedFiles += 1;
+          logs.push(`复制 ${fileName} -> ${targetFolder}`);
+        } catch (error) {
+          logs.push(`复制失败 ${fileName} -> ${targetFolder} (${error.message})`);
+        }
+      }
+    }
+
+    logs.push(`清理文件数: ${cleanedFiles}`);
+    logs.push(`匹配文件数: ${matchedFiles}`);
+    logs.push(`复制文件数: ${copiedFiles}`);
+
+    return {
+      success: true,
+      message: "文件替换执行完成。",
+      logs
+    };
+  } catch (error) {
+    logs.push(`执行失败: ${error.message}`);
+    return {
+      success: false,
+      message: "文件替换执行失败。",
+      logs
+    };
   }
-
-  logs.push(`清理文件数: ${cleanedFiles}`);
-  logs.push(`匹配文件数: ${matchedFiles}`);
-  logs.push(`复制文件数: ${copiedFiles}`);
-
-  return {
-    success: true,
-    message: "文件替换执行完成。",
-    logs
-  };
 });
