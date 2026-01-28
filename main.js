@@ -5,6 +5,37 @@ const { spawn } = require("child_process");
 
 const EXECUTABLE_NAME = "scada.develop.exe";
 const PREFIXES = ["Scada", "Neutral", "JSCC", "Debug"];
+const DEFAULT_SOURCE_FOLDER =
+  "\\\\192.168.11.3\\xxx\\xxx\\xxx\\3-固件打包\\v3.38\\feature\\HMIS-10657-趋势图改原生\\3.38.10657.22";
+const DEFAULT_VERSION = "3.39.10657.1";
+const REPLACE_FOLDERS = [
+  "cboxs\\New",
+  "cboxs\\Old",
+  "hmis\\New",
+  "hmis\\Old",
+  "iot\\New",
+  "iot\\Old",
+  "ipc\\New",
+  "ipc\\Old"
+];
+const REPLACE_PATTERNS = [
+  { regex: /haiwell_cbox_a40i_.*_new\.iot/i, target: "cboxs\\New" },
+  { regex: /HaiwellBoxs.*\.box/i, target: "cboxs\\Old" },
+  { regex: /haiwell_hmi_a40i_.*_new\.iot/i, target: "hmis\\New" },
+  { regex: /HaiwellHmis.*\.hmi/i, target: "hmis\\Old" },
+  { regex: /haiwell_hmi_t507_.*_new\.iot/i, target: "iot\\New" },
+  { regex: /HMI.*\.iot/i, target: "iot\\Old" },
+  { regex: /haiwell_ipc_.*_new\.iot/i, target: "ipc\\New" },
+  { regex: /HaiwellIPC.*\.ipc/i, target: "ipc\\Old" },
+  { regex: /Boxs_New_.*\.iot/i, target: "cboxs\\New" },
+  { regex: /Boxs_.*\.box/i, target: "cboxs\\Old" },
+  { regex: /Hmis_New_.*\.iot/i, target: "hmis\\New" },
+  { regex: /Hmis_.*\.box/i, target: "hmis\\Old" },
+  { regex: /IOT_New_.*\.iot/i, target: "iot\\New" },
+  { regex: /IOT_.*\.iot/i, target: "iot\\Old" },
+  { regex: /IPC_New_.*\.iot/i, target: "ipc\\New" },
+  { regex: /IPC_.*\.ipc/i, target: "ipc\\Old" }
+];
 
 const extractVersionFromPath = targetPath => {
   const segments = targetPath.split(path.sep);
@@ -141,6 +172,16 @@ ipcMain.handle("select-root", async () => {
   return result.filePaths[0];
 });
 
+ipcMain.handle("select-folder", async () => {
+  const result = await dialog.showOpenDialog({
+    properties: ["openDirectory"],
+  });
+  if (result.canceled || result.filePaths.length === 0) {
+    return null;
+  }
+  return result.filePaths[0];
+});
+
 ipcMain.handle("default-root", async () => {
   if (process.env.PORTABLE_EXECUTABLE_DIR) {
     return process.env.PORTABLE_EXECUTABLE_DIR;
@@ -174,4 +215,95 @@ ipcMain.handle("launch-exe", async (_event, exePath) => {
   } catch (error) {
     return false;
   }
+});
+
+const ensureFolder = async (folderPath) => {
+  await fs.mkdir(folderPath, { recursive: true });
+};
+
+const toTargetFolder = (baseFolder, relativeFolder) =>
+  path.join(baseFolder, ...relativeFolder.split(/[/\\]/));
+
+ipcMain.handle("replace-firmware-files", async (_event, payload) => {
+  const sourceFolder = payload?.sourceFolder?.trim() || DEFAULT_SOURCE_FOLDER;
+  const version = payload?.version?.trim() || DEFAULT_VERSION;
+  const baseFolder = `D:\\sacda组态\\Scada-v${version}\\HaiwellDir\\firmware`;
+  const logs = [
+    `源文件夹: ${sourceFolder}`,
+    `目标版本: ${version}`,
+    `目标路径: ${baseFolder}`
+  ];
+  let copiedFiles = 0;
+  let cleanedFiles = 0;
+  let matchedFiles = 0;
+
+  try {
+    const sourceStat = await fs.stat(sourceFolder);
+    if (!sourceStat.isDirectory()) {
+      return {
+        success: false,
+        message: "源文件夹不存在或不是目录。",
+        logs
+      };
+    }
+  } catch (error) {
+    return {
+      success: false,
+      message: "无法访问源文件夹。",
+      logs: [...logs, error.message]
+    };
+  }
+
+  for (const folder of REPLACE_FOLDERS) {
+    const targetFolder = toTargetFolder(baseFolder, folder);
+    try {
+      await ensureFolder(targetFolder);
+      const entries = await fs.readdir(targetFolder, { withFileTypes: true });
+      for (const entry of entries) {
+        if (!entry.isFile()) {
+          continue;
+        }
+        const filePath = path.join(targetFolder, entry.name);
+        await fs.rm(filePath, { force: true });
+        cleanedFiles += 1;
+      }
+      logs.push(`清理完成: ${targetFolder}`);
+    } catch (error) {
+      logs.push(`清理失败: ${targetFolder} (${error.message})`);
+    }
+  }
+
+  const sourceEntries = await fs.readdir(sourceFolder, { withFileTypes: true });
+  for (const entry of sourceEntries) {
+    if (!entry.isFile()) {
+      continue;
+    }
+    const fileName = entry.name;
+    const sourcePath = path.join(sourceFolder, fileName);
+    for (const pattern of REPLACE_PATTERNS) {
+      if (!pattern.regex.test(fileName)) {
+        continue;
+      }
+      matchedFiles += 1;
+      const targetFolder = toTargetFolder(baseFolder, pattern.target);
+      try {
+        await ensureFolder(targetFolder);
+        await fs.copyFile(sourcePath, path.join(targetFolder, fileName));
+        copiedFiles += 1;
+        logs.push(`复制 ${fileName} -> ${targetFolder}`);
+      } catch (error) {
+        logs.push(`复制失败 ${fileName} -> ${targetFolder} (${error.message})`);
+      }
+    }
+  }
+
+  logs.push(`清理文件数: ${cleanedFiles}`);
+  logs.push(`匹配文件数: ${matchedFiles}`);
+  logs.push(`复制文件数: ${copiedFiles}`);
+
+  return {
+    success: true,
+    message: "文件替换执行完成。",
+    logs
+  };
 });

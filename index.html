@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
@@ -7,36 +7,67 @@
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
-    <header class="header">
-      <div class="title">打开组态</div>
-      <div class="path" id="rootPath">未选择路径</div>
-      <button id="selectRoot" class="primary">选择路径</button>
-      <button id="refresh" class="ghost">刷新</button>
+    <header class="app-header">
+      <div class="brand"></div>
+      <nav class="view-switch" aria-label="功能切换">
+        <button type="button" class="tab is-active" data-tab="versions">版本浏览</button>
+        <button type="button" class="tab" data-tab="replace">文件替换</button>
+      </nav>
     </header>
 
     <main class="main">
-      <section class="panel">
-        <div class="group-label">版本筛选</div>
-        <div class="filters">
-          <div class="filter-row">
-            <label class="filter-label" for="searchInput">关键词</label>
-            <input
-              id="searchInput"
-              class="search-input"
-              type="text"
-              placeholder="输入版本号或名称筛选"
-            />
+      <section class="tab-panel active" id="tabVersions">
+        <header class="header">
+          <div class="title">打开组态</div>
+          <div class="path" id="rootPath">未选择路径</div>
+          <button id="selectRoot" class="primary">选择路径</button>
+          <button id="refresh" class="ghost">刷新</button>
+        </header>
+        <section class="panel">
+          <div class="group-label">版本筛选</div>
+          <div class="filters">
+            <div class="filter-row">
+              <label class="filter-label" for="searchInput">关键词</label>
+              <input id="searchInput" class="search-input" type="text" placeholder="输入版本号或名称筛选" />
+            </div>
+            <div class="filter-row">
+              <span class="filter-label">前缀</span>
+              <div id="prefixFilters" class="prefix-filters"></div>
+            </div>
           </div>
-          <div class="filter-row">
-            <span class="filter-label">前缀</span>
-            <div id="prefixFilters" class="prefix-filters"></div>
-          </div>
-        </div>
-        <div id="groupFilters" class="group-filters"></div>
+          <div id="groupFilters" class="group-filters"></div>
+        </section>
+        <section class="panel">
+          <div class="group-label">版本列表</div>
+          <div id="versionList" class="version-list"></div>
+        </section>
       </section>
-      <section class="panel">
-        <div class="group-label">版本列表</div>
-        <div id="versionList" class="version-list"></div>
+
+      <section class="tab-panel" id="tabReplace">
+        <section class="panel">
+          <div class="group-label">固件文件替换</div>
+          <div class="replace-form">
+            <div class="field-row">
+              <label for="sourceFolderInput">源文件夹</label>
+              <div class="field-input">
+                <input id="sourceFolderInput" type="text" />
+                <button id="sourceBrowse" class="ghost">选择文件夹</button>
+              </div>
+            </div>
+            <div class="field-row">
+              <label for="versionInput">目标版本号</label>
+              <input id="versionInput" type="text" />
+            </div>
+            <div class="field-actions">
+              <button id="runReplace" class="primary">执行替换</button>
+              <span id="replaceStatus" class="status-text"></span>
+            </div>
+          </div>
+        </section>
+        <section class="panel">
+          <div class="group-label">执行日志</div>
+          <pre id="replaceLog" class="log-panel">等待执行...</pre>
+        </section>
       </section>
     </main>
 
