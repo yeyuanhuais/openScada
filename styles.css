@@ -221,9 +221,11 @@ button.ghost {
     box-shadow 0.2s ease;
 }
 
-.version-item button {
-  background: #1e40af;
-  color: #fff;
+.version-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: stretch;
 }
 
 .version-item button:hover,
@@ -307,6 +309,11 @@ button.ghost:hover {
   border: 1px solid #d8e1ee;
   font-size: 14px;
   background: #f8fafc;
+}
+
+.field-hint {
+  font-size: 12px;
+  color: #64748b;
 }
 
 .field-input {
