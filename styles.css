@@ -18,6 +18,45 @@ body {
   background: linear-gradient(180deg, #f8fafc 0%, #eef2f7 100%);
 }
 
+.app-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 24px 10px;
+}
+
+.brand {
+  font-size: 18px;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.view-switch {
+  display: inline-flex;
+  gap: 8px;
+  background: #ffffff;
+  border-radius: 999px;
+  padding: 6px;
+  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.08);
+}
+
+.view-switch button {
+  border: none;
+  background: transparent;
+  color: #475569;
+  font-size: 14px;
+  padding: 8px 16px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.view-switch button.is-active {
+  background: #2f6feb;
+  color: #ffffff;
+  box-shadow: 0 6px 12px rgba(47, 111, 235, 0.28);
+}
+
 .header {
   display: flex;
   flex-wrap: wrap;
@@ -61,25 +100,6 @@ button.primary {
 button.ghost {
   background: #e2e8f0;
   color: #1f2a44;
-}
-
-.tabs {
-  display: flex;
-  gap: 12px;
-  margin-bottom: 18px;
-}
-
-.tab {
-  padding: 8px 18px;
-  border-radius: 999px;
-  background: #e2e8f0;
-  color: #1f2a44;
-  font-weight: 600;
-}
-
-.tab.active {
-  background: #2563eb;
-  color: #fff;
 }
 
 .tab-panel {

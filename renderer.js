@@ -1,16 +1,3 @@
-const scadaApi = window.scadaApi ?? {
-  selectRoot: async () => null,
-  defaultRoot: async () => "",
-  scanRoot: async () => [],
-  launchExe: async () => false,
-  selectFolder: async () => null,
-  replaceFirmwareFiles: async () => ({
-    success: false,
-    message: "当前环境不支持执行替换操作。",
-    logs: []
-  })
-};
-
 const rootPathEl = document.getElementById("rootPath");
 const groupFiltersEl = document.getElementById("groupFilters");
 const prefixFiltersEl = document.getElementById("prefixFilters");
@@ -34,12 +21,11 @@ let selectedGroups = new Set();
 let selectedPrefixes = new Set();
 let searchKeyword = "";
 
-const DEFAULT_SOURCE_FOLDER =
-  "\\\\192.168.11.3\\xxx\\xxx\\xxx\\3-固件打包\\v3.38\\feature\\HMIS-10657-趋势图改原生\\3.38.10657.22";
+const DEFAULT_SOURCE_FOLDER = "\\\\192.168.11.3\\xxx\\xxx\\xxx\\3-固件打包\\v3.38\\feature\\HMIS-10657-趋势图改原生\\3.38.10657.22";
 const DEFAULT_VERSION = "3.39.10657.1";
 
 const PREFIX_ORDER = ["Scada", "Neutral", "JSCC", "其他"];
-const prefixClassName = (prefix) => {
+const prefixClassName = prefix => {
   const normalized = (prefix || "其他").toLowerCase();
   if (normalized === "其他") {
     return "other";
@@ -54,7 +40,7 @@ const renderGroups = () => {
     return;
   }
 
-  groupedData.forEach((group) => {
+  groupedData.forEach(group => {
     const wrapper = document.createElement("label");
     wrapper.className = "group-filter";
 
@@ -82,8 +68,8 @@ const renderGroups = () => {
 const renderPrefixes = () => {
   prefixFiltersEl.innerHTML = "";
   const prefixes = new Set();
-  groupedData.forEach((group) => {
-    group.items.forEach((item) => {
+  groupedData.forEach(group => {
+    group.items.forEach(item => {
       prefixes.add(item.prefix || "其他");
     });
   });
@@ -92,8 +78,7 @@ const renderPrefixes = () => {
     const indexA = PREFIX_ORDER.indexOf(a);
     const indexB = PREFIX_ORDER.indexOf(b);
     if (indexA !== -1 || indexB !== -1) {
-      return (indexA === -1 ? Number.MAX_SAFE_INTEGER : indexA)
-        - (indexB === -1 ? Number.MAX_SAFE_INTEGER : indexB);
+      return (indexA === -1 ? Number.MAX_SAFE_INTEGER : indexA) - (indexB === -1 ? Number.MAX_SAFE_INTEGER : indexB);
     }
     return a.localeCompare(b, "zh-CN");
   });
@@ -103,7 +88,7 @@ const renderPrefixes = () => {
     return;
   }
 
-  sortedPrefixes.forEach((prefix) => {
+  sortedPrefixes.forEach(prefix => {
     const wrapper = document.createElement("label");
     wrapper.className = "prefix-filter";
 
@@ -131,12 +116,10 @@ const renderPrefixes = () => {
 const renderVersions = () => {
   versionListEl.innerHTML = "";
   const keyword = searchKeyword.trim().toLowerCase();
-  const visibleGroups = groupedData.filter((group) => selectedGroups.has(group.group));
-  const visibleItems = visibleGroups.flatMap((group) =>
-    group.items.filter((item) => selectedPrefixes.has(item.prefix || "其他"))
-  );
+  const visibleGroups = groupedData.filter(group => selectedGroups.has(group.group));
+  const visibleItems = visibleGroups.flatMap(group => group.items.filter(item => selectedPrefixes.has(item.prefix || "其他")));
 
-  const filteredItems = visibleItems.filter((item) => {
+  const filteredItems = visibleItems.filter(item => {
     if (!keyword) {
       return true;
     }
@@ -149,7 +132,7 @@ const renderVersions = () => {
     return;
   }
 
-  filteredItems.forEach((item) => {
+  filteredItems.forEach(item => {
     const card = document.createElement("div");
     card.className = "version-item";
 
@@ -179,7 +162,7 @@ const renderVersions = () => {
     const button = document.createElement("button");
     button.textContent = "打开";
     button.addEventListener("click", async () => {
-      await scadaApi.launchExe(item.exePath);
+      await electronAPI.launchExe(item.exePath);
     });
 
     card.appendChild(meta);
@@ -190,21 +173,19 @@ const renderVersions = () => {
 
 const refreshData = async () => {
   if (!currentRoot) {
-    currentRoot = await scadaApi.defaultRoot();
+    currentRoot = await electronAPI.defaultRoot();
     rootPathEl.textContent = currentRoot;
   }
-  groupedData = await scadaApi.scanRoot(currentRoot);
-  selectedGroups = new Set(groupedData.map((group) => group.group));
-  selectedPrefixes = new Set(
-    groupedData.flatMap((group) => group.items.map((item) => item.prefix || "其他"))
-  );
+  groupedData = await electronAPI.scanRoot(currentRoot);
+  selectedGroups = new Set(groupedData.map(group => group.group));
+  selectedPrefixes = new Set(groupedData.flatMap(group => group.items.map(item => item.prefix || "其他")));
   renderGroups();
   renderPrefixes();
   renderVersions();
 };
 
 selectRootButton.addEventListener("click", async () => {
-  const selected = await scadaApi.selectRoot();
+  const selected = await electronAPI.selectRoot();
   if (selected) {
     currentRoot = selected;
     rootPathEl.textContent = selected;
@@ -216,21 +197,21 @@ refreshButton.addEventListener("click", async () => {
   await refreshData();
 });
 
-searchInputEl.addEventListener("input", (event) => {
+searchInputEl.addEventListener("input", event => {
   searchKeyword = event.target.value || "";
   renderVersions();
 });
 
-const setActiveTab = (targetTab) => {
-  tabs.forEach((tab) => {
-    tab.classList.toggle("active", tab.dataset.tab === targetTab);
+const setActiveTab = targetTab => {
+  tabs.forEach(tab => {
+    tab.classList.toggle("is-active", tab.dataset.tab === targetTab);
   });
-  tabPanels.forEach((panel) => {
+  tabPanels.forEach(panel => {
     panel.classList.toggle("active", panel.id === `tab${targetTab[0].toUpperCase()}${targetTab.slice(1)}`);
   });
 };
 
-tabs.forEach((tab) => {
+tabs.forEach(tab => {
   tab.addEventListener("click", () => {
     setActiveTab(tab.dataset.tab);
   });
@@ -240,13 +221,13 @@ sourceFolderInput.value = DEFAULT_SOURCE_FOLDER;
 versionInput.value = DEFAULT_VERSION;
 
 sourceBrowseButton.addEventListener("click", async () => {
-  const selected = await scadaApi.selectFolder();
+  const selected = await electronAPI.selectFolder();
   if (selected) {
     sourceFolderInput.value = selected;
   }
 });
 
-const renderReplaceLogs = (logs) => {
+const renderReplaceLogs = logs => {
   replaceLogEl.textContent = logs.length ? logs.join("\n") : "暂无日志输出。";
 };
 
@@ -258,7 +239,7 @@ runReplaceButton.addEventListener("click", async () => {
   runReplaceButton.disabled = true;
   renderReplaceLogs([]);
 
-  const result = await scadaApi.replaceFirmwareFiles({ sourceFolder, version });
+  const result = await electronAPI.replaceFirmwareFiles({ sourceFolder, version });
   replaceStatusEl.textContent = result.message || (result.success ? "执行完成" : "执行失败");
   replaceStatusEl.classList.toggle("error", !result.success);
   renderReplaceLogs(result.logs || []);

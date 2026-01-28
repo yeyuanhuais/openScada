@@ -1,6 +1,6 @@
 const { contextBridge, ipcRenderer } = require("electron");
 
-contextBridge.exposeInMainWorld("scadaApi", {
+contextBridge.exposeInMainWorld("electronAPI", {
   selectRoot: () => ipcRenderer.invoke("select-root"),
   defaultRoot: () => ipcRenderer.invoke("default-root"),
   scanRoot: (rootDir) => ipcRenderer.invoke("scan-root", rootDir),

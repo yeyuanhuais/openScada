@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
@@ -7,31 +7,28 @@
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
-    <header class="header">
-      <div class="title">打开组态</div>
-      <div class="path" id="rootPath">未选择路径</div>
-      <button id="selectRoot" class="primary">选择路径</button>
-      <button id="refresh" class="ghost">刷新</button>
+    <header class="app-header">
+      <div class="brand"></div>
+      <nav class="view-switch" aria-label="功能切换">
+        <button type="button" class="tab is-active" data-tab="versions">版本浏览</button>
+        <button type="button" class="tab" data-tab="replace">文件替换</button>
+      </nav>
     </header>
-
-    <nav class="tabs">
-      <button class="tab active" data-tab="versions">版本浏览</button>
-      <button class="tab" data-tab="replace">文件替换</button>
-    </nav>
 
     <main class="main">
       <section class="tab-panel active" id="tabVersions">
+        <header class="header">
+          <div class="title">打开组态</div>
+          <div class="path" id="rootPath">未选择路径</div>
+          <button id="selectRoot" class="primary">选择路径</button>
+          <button id="refresh" class="ghost">刷新</button>
+        </header>
         <section class="panel">
           <div class="group-label">版本筛选</div>
           <div class="filters">
             <div class="filter-row">
               <label class="filter-label" for="searchInput">关键词</label>
-              <input
-                id="searchInput"
-                class="search-input"
-                type="text"
-                placeholder="输入版本号或名称筛选"
-              />
+              <input id="searchInput" class="search-input" type="text" placeholder="输入版本号或名称筛选" />
             </div>
             <div class="filter-row">
               <span class="filter-label">前缀</span>
