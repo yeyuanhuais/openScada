@@ -160,13 +160,30 @@ const renderVersions = () => {
     meta.appendChild(info);
 
     const button = document.createElement("button");
+    button.className = "primary";
     button.textContent = "打开";
     button.addEventListener("click", async () => {
       await electronAPI.launchExe(item.exePath);
     });
 
+    const selectButton = document.createElement("button");
+    selectButton.className = "ghost";
+    selectButton.textContent = "设为目标";
+    selectButton.addEventListener("click", () => {
+      const targetVersion = item.version || item.label;
+      versionInput.value = targetVersion;
+      replaceStatusEl.textContent = `已选择目标版本：${targetVersion}`;
+      replaceStatusEl.classList.remove("error");
+      setActiveTab("replace");
+    });
+
+    const actions = document.createElement("div");
+    actions.className = "version-actions";
+    actions.appendChild(selectButton);
+    actions.appendChild(button);
+
     card.appendChild(meta);
-    card.appendChild(button);
+    card.appendChild(actions);
     versionListEl.appendChild(card);
   });
 };
