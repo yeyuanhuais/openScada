@@ -1,3 +1,16 @@
+const scadaApi = window.scadaApi ?? {
+  selectRoot: async () => null,
+  defaultRoot: async () => "",
+  scanRoot: async () => [],
+  launchExe: async () => false,
+  selectFolder: async () => null,
+  replaceFirmwareFiles: async () => ({
+    success: false,
+    message: "当前环境不支持执行替换操作。",
+    logs: []
+  })
+};
+
 const rootPathEl = document.getElementById("rootPath");
 const groupFiltersEl = document.getElementById("groupFilters");
 const prefixFiltersEl = document.getElementById("prefixFilters");
@@ -5,12 +18,25 @@ const versionListEl = document.getElementById("versionList");
 const searchInputEl = document.getElementById("searchInput");
 const selectRootButton = document.getElementById("selectRoot");
 const refreshButton = document.getElementById("refresh");
+const tabs = document.querySelectorAll(".tab");
+const tabPanels = document.querySelectorAll(".tab-panel");
+
+const sourceFolderInput = document.getElementById("sourceFolderInput");
+const sourceBrowseButton = document.getElementById("sourceBrowse");
+const versionInput = document.getElementById("versionInput");
+const runReplaceButton = document.getElementById("runReplace");
+const replaceStatusEl = document.getElementById("replaceStatus");
+const replaceLogEl = document.getElementById("replaceLog");
 
 let currentRoot = null;
 let groupedData = [];
 let selectedGroups = new Set();
 let selectedPrefixes = new Set();
 let searchKeyword = "";
+
+const DEFAULT_SOURCE_FOLDER =
+  "\\\\192.168.11.3\\xxx\\xxx\\xxx\\3-固件打包\\v3.38\\feature\\HMIS-10657-趋势图改原生\\3.38.10657.22";
+const DEFAULT_VERSION = "3.39.10657.1";
 
 const PREFIX_ORDER = ["Scada", "Neutral", "JSCC", "其他"];
 const prefixClassName = (prefix) => {
@@ -153,7 +179,7 @@ const renderVersions = () => {
     const button = document.createElement("button");
     button.textContent = "打开";
     button.addEventListener("click", async () => {
-      await window.scadaApi.launchExe(item.exePath);
+      await scadaApi.launchExe(item.exePath);
     });
 
     card.appendChild(meta);
@@ -164,10 +190,10 @@ const renderVersions = () => {
 
 const refreshData = async () => {
   if (!currentRoot) {
-    currentRoot = await window.scadaApi.defaultRoot();
+    currentRoot = await scadaApi.defaultRoot();
     rootPathEl.textContent = currentRoot;
   }
-  groupedData = await window.scadaApi.scanRoot(currentRoot);
+  groupedData = await scadaApi.scanRoot(currentRoot);
   selectedGroups = new Set(groupedData.map((group) => group.group));
   selectedPrefixes = new Set(
     groupedData.flatMap((group) => group.items.map((item) => item.prefix || "其他"))
@@ -178,7 +204,7 @@ const refreshData = async () => {
 };
 
 selectRootButton.addEventListener("click", async () => {
-  const selected = await window.scadaApi.selectRoot();
+  const selected = await scadaApi.selectRoot();
   if (selected) {
     currentRoot = selected;
     rootPathEl.textContent = selected;
@@ -193,6 +219,50 @@ refreshButton.addEventListener("click", async () => {
 searchInputEl.addEventListener("input", (event) => {
   searchKeyword = event.target.value || "";
   renderVersions();
+});
+
+const setActiveTab = (targetTab) => {
+  tabs.forEach((tab) => {
+    tab.classList.toggle("active", tab.dataset.tab === targetTab);
+  });
+  tabPanels.forEach((panel) => {
+    panel.classList.toggle("active", panel.id === `tab${targetTab[0].toUpperCase()}${targetTab.slice(1)}`);
+  });
+};
+
+tabs.forEach((tab) => {
+  tab.addEventListener("click", () => {
+    setActiveTab(tab.dataset.tab);
+  });
+});
+
+sourceFolderInput.value = DEFAULT_SOURCE_FOLDER;
+versionInput.value = DEFAULT_VERSION;
+
+sourceBrowseButton.addEventListener("click", async () => {
+  const selected = await scadaApi.selectFolder();
+  if (selected) {
+    sourceFolderInput.value = selected;
+  }
+});
+
+const renderReplaceLogs = (logs) => {
+  replaceLogEl.textContent = logs.length ? logs.join("\n") : "暂无日志输出。";
+};
+
+runReplaceButton.addEventListener("click", async () => {
+  const sourceFolder = sourceFolderInput.value.trim() || DEFAULT_SOURCE_FOLDER;
+  const version = versionInput.value.trim() || DEFAULT_VERSION;
+  replaceStatusEl.textContent = "正在执行...";
+  replaceStatusEl.classList.remove("error");
+  runReplaceButton.disabled = true;
+  renderReplaceLogs([]);
+
+  const result = await scadaApi.replaceFirmwareFiles({ sourceFolder, version });
+  replaceStatusEl.textContent = result.message || (result.success ? "执行完成" : "执行失败");
+  replaceStatusEl.classList.toggle("error", !result.success);
+  renderReplaceLogs(result.logs || []);
+  runReplaceButton.disabled = false;
 });
 
 refreshData();
