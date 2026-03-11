@@ -21,5 +21,9 @@
     "files": [
       "**/*"
     ]
+  },
+  "dependencies": {
+    "electron-store": "^11.0.2",
+    "yauzl": "^3.2.1"
   }
 }

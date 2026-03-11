@@ -303,7 +303,8 @@ button.ghost:hover {
   font-size: 13px;
 }
 
-.field-row input {
+.field-row input,
+.field-row select {
   padding: 8px 12px;
   border-radius: 8px;
   border: 1px solid #d8e1ee;
@@ -354,4 +355,56 @@ button.ghost:hover {
 
 .empty {
   color: #a0aec0;
+}
+
+/* zip 文件下拉框 */
+.zip-file-select {
+  flex: 1;
+  height: 32px;
+  padding: 0 8px;
+  border: 1px solid var(--border, #d0d5dd);
+  border-radius: 6px;
+  background: var(--surface, #fff);
+  color: var(--text, #101828);
+  font-size: 13px;
+  cursor: pointer;
+  outline: none;
+  transition: border-color 0.15s;
+}
+.zip-file-select:focus {
+  border-color: var(--primary, #2563eb);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+}
+.zip-file-select:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* 进度条容器 */
+.progress-wrap {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 8px;
+}
+.progress-bar-track {
+  flex: 1;
+  height: 8px;
+  background: var(--border, #e4e7ec);
+  border-radius: 99px;
+  overflow: hidden;
+}
+.progress-bar-fill {
+  height: 100%;
+  width: 0%;
+  background: var(--primary, #2563eb);
+  border-radius: 99px;
+  transition: width 0.2s ease;
+}
+.progress-label {
+  font-size: 12px;
+  color: var(--text-muted, #667085);
+  white-space: nowrap;
+  min-width: 110px;
+  text-align: right;
 }

@@ -12,6 +12,7 @@
       <nav class="view-switch" aria-label="功能切换">
         <button type="button" class="tab is-active" data-tab="versions">版本浏览</button>
         <button type="button" class="tab" data-tab="replace">文件替换</button>
+        <button type="button" class="tab" data-tab="extract">组态解压</button>
       </nav>
     </header>
 
@@ -57,7 +58,7 @@
             <div class="field-row">
               <label for="versionInput">目标版本号</label>
               <input id="versionInput" type="text" />
-              <div class="field-hint">可在“版本列表”中点击“设为目标”快速填入。</div>
+              <div class="field-hint">可在"版本列表"中点击"设为目标"快速填入。</div>
             </div>
             <div class="field-actions">
               <button id="runReplace" class="primary">执行替换</button>
@@ -68,6 +69,46 @@
         <section class="panel">
           <div class="group-label">执行日志</div>
           <pre id="replaceLog" class="log-panel">等待执行...</pre>
+        </section>
+      </section>
+
+      <section class="tab-panel" id="tabExtract">
+        <section class="panel">
+          <div class="group-label">组态解压</div>
+          <div class="extract-form">
+            <div class="field-row">
+              <label for="extractFolderInput">源文件夹</label>
+              <div class="field-input">
+                <input id="extractFolderInput" type="text" placeholder="输入或选择包含 zip 文件的文件夹路径" />
+                <button id="extractBrowse" class="ghost">选择文件夹</button>
+                <button id="scanZips" class="ghost">扫描文件</button>
+              </div>
+            </div>
+            <div class="field-row">
+              <label for="zipFileSelect">选择文件</label>
+              <select id="zipFileSelect" class="zip-file-select" disabled>
+                <option value="">-- 请先扫描文件夹 --</option>
+              </select>
+            </div>
+            <div class="field-row">
+              <label>解压目标</label>
+              <div class="field-hint" id="extractDestHint">解压路径将基于"版本浏览"中选择的根目录，请先在版本浏览页选择路径。</div>
+            </div>
+            <div class="field-actions">
+              <button id="runExtract" class="primary" disabled>执行解压</button>
+              <span id="extractStatus" class="status-text"></span>
+            </div>
+            <div class="progress-wrap" id="extractProgressWrap" style="display:none">
+              <div class="progress-bar-track">
+                <div class="progress-bar-fill" id="extractProgressFill"></div>
+              </div>
+              <span class="progress-label" id="extractProgressLabel">0%</span>
+            </div>
+          </div>
+        </section>
+        <section class="panel">
+          <div class="group-label">执行日志</div>
+          <pre id="extractLog" class="log-panel">等待执行...</pre>
         </section>
       </section>
     </main>
