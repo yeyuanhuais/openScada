@@ -33,11 +33,11 @@ const extractProgressLabel = document.getElementById("extractProgressLabel");
 // ─── 状态 ─────────────────────────────────────────────────────────────────────
 let currentRoot = null;
 let groupedData = [];
-let selectedGroups = new Set();
-let selectedPrefixes = new Set();
+let selectedGroup = null; // 单选：null 表示不限
+let selectedPrefix = null; // 单选：null 表示不限
 let searchKeyword = "";
 let selectedTargetPrefix = null;
-let selectedZipPath = null; // 当前选中的 zip 文件路径
+let selectedZipPath = null;
 
 const DEFAULT_SOURCE_FOLDER = "\\\\192.168.11.3\\xxx\\xxx\\xxx\\3-固件打包\\v3.38\\feature\\HMIS-10657-趋势图改原生\\3.38.10657.22";
 const DEFAULT_VERSION = "3.39.10657.1";
@@ -69,19 +69,19 @@ const renderGroups = () => {
     const wrapper = document.createElement("label");
     wrapper.className = "group-filter";
 
-    const checkbox = document.createElement("input");
-    checkbox.type = "checkbox";
-    checkbox.checked = selectedGroups.has(group.group);
-    checkbox.addEventListener("change", () => {
-      if (checkbox.checked) selectedGroups.add(group.group);
-      else selectedGroups.delete(group.group);
+    const radio = document.createElement("input");
+    radio.type = "radio";
+    radio.name = "groupFilter";
+    radio.checked = selectedGroup === group.group;
+    radio.addEventListener("change", () => {
+      selectedGroup = group.group;
       renderVersions();
     });
 
     const text = document.createElement("span");
     text.textContent = group.group;
 
-    wrapper.appendChild(checkbox);
+    wrapper.appendChild(radio);
     wrapper.appendChild(text);
     groupFiltersEl.appendChild(wrapper);
   });
@@ -98,8 +98,7 @@ const renderPrefixes = () => {
     const indexA = PREFIX_ORDER.indexOf(a);
     const indexB = PREFIX_ORDER.indexOf(b);
     if (indexA !== -1 || indexB !== -1) {
-      return (indexA === -1 ? Number.MAX_SAFE_INTEGER : indexA) -
-             (indexB === -1 ? Number.MAX_SAFE_INTEGER : indexB);
+      return (indexA === -1 ? Number.MAX_SAFE_INTEGER : indexA) - (indexB === -1 ? Number.MAX_SAFE_INTEGER : indexB);
     }
     return a.localeCompare(b, "zh-CN");
   });
@@ -113,19 +112,22 @@ const renderPrefixes = () => {
     const wrapper = document.createElement("label");
     wrapper.className = "prefix-filter";
 
-    const checkbox = document.createElement("input");
-    checkbox.type = "checkbox";
-    checkbox.checked = selectedPrefixes.has(prefix);
-    checkbox.addEventListener("change", () => {
-      if (checkbox.checked) selectedPrefixes.add(prefix);
-      else selectedPrefixes.delete(prefix);
+    const radio = document.createElement("input");
+    radio.type = "radio";
+    radio.name = "prefixFilter";
+    radio.checked = selectedPrefix === prefix;
+    radio.addEventListener("change", () => {
+      selectedPrefix = prefix;
+      // 切换前缀时重置版本组选择
+      selectedGroup = null;
+      renderGroups();
       renderVersions();
     });
 
     const text = document.createElement("span");
     text.textContent = prefix;
 
-    wrapper.appendChild(checkbox);
+    wrapper.appendChild(radio);
     wrapper.appendChild(text);
     prefixFiltersEl.appendChild(wrapper);
   });
@@ -134,22 +136,29 @@ const renderPrefixes = () => {
 const renderVersions = () => {
   versionListEl.innerHTML = "";
   const keyword = searchKeyword.trim().toLowerCase();
-  const visibleGroups = groupedData.filter(group => selectedGroups.has(group.group));
-  const visibleItems = visibleGroups.flatMap(group =>
-    group.items.filter(item => selectedPrefixes.has(item.prefix || "其他"))
-  );
-  const filteredItems = visibleItems.filter(item => {
-    if (!keyword) return true;
-    const haystack = `${item.label} ${item.version || ""} ${item.group} ${item.prefix || ""}`.toLowerCase();
-    return haystack.includes(keyword);
-  });
 
-  if (filteredItems.length === 0) {
+  // 先按前缀过滤，再按版本组过滤
+  let items = groupedData.flatMap(group => group.items);
+
+  if (selectedPrefix !== null) {
+    items = items.filter(item => (item.prefix || "其他") === selectedPrefix);
+  }
+  if (selectedGroup !== null) {
+    items = items.filter(item => item.group === selectedGroup);
+  }
+  if (keyword) {
+    items = items.filter(item => {
+      const haystack = `${item.label} ${item.version || ""} ${item.group} ${item.prefix || ""}`.toLowerCase();
+      return haystack.includes(keyword);
+    });
+  }
+
+  if (items.length === 0) {
     versionListEl.innerHTML = '<div class="empty">暂无匹配结果</div>';
     return;
   }
 
-  filteredItems.forEach(item => {
+  items.forEach(item => {
     const card = document.createElement("div");
     card.className = "version-item";
 
@@ -185,7 +194,7 @@ const renderVersions = () => {
 
     const selectButton = document.createElement("button");
     selectButton.className = "ghost";
-    selectButton.textContent = "设为目标";
+    selectButton.textContent = "替换";
     selectButton.addEventListener("click", () => {
       const targetVersion = item.version || item.label;
       versionInput.value = targetVersion;
@@ -209,7 +218,10 @@ const renderVersions = () => {
 // 更新解压目标提示
 const updateExtractDestHint = () => {
   if (currentRoot && selectedZipPath) {
-    const zipName = selectedZipPath.split(/[/\\]/).pop().replace(/\.zip$/i, "");
+    const zipName = selectedZipPath
+      .split(/[/\\]/)
+      .pop()
+      .replace(/\.zip$/i, "");
     const destPath = `${currentRoot}\\${zipName}`;
     extractDestHintEl.textContent = `将解压到: ${destPath}`;
     runExtractButton.disabled = false;
@@ -225,12 +237,13 @@ const updateExtractDestHint = () => {
 const refreshData = async () => {
   if (!currentRoot) {
     const stored = await electronAPI.storeGetAll();
-    currentRoot = stored.rootPath || await electronAPI.defaultRoot();
+    currentRoot = stored.rootPath || (await electronAPI.defaultRoot());
     rootPathEl.textContent = currentRoot;
   }
   groupedData = await electronAPI.scanRoot(currentRoot);
-  selectedGroups = new Set(groupedData.map(group => group.group));
-  selectedPrefixes = new Set(groupedData.flatMap(group => group.items.map(item => item.prefix || "其他")));
+  // 单选模式：刷新后重置为不限
+  selectedGroup = null;
+  selectedPrefix = null;
   renderGroups();
   renderPrefixes();
   renderVersions();
@@ -238,6 +251,8 @@ const refreshData = async () => {
 };
 
 // ─── 版本浏览事件 ─────────────────────────────────────────────────────────────
+
+const clearFiltersButton = document.getElementById("clearFilters");
 
 selectRootButton.addEventListener("click", async () => {
   const selected = await electronAPI.selectRoot(currentRoot || rootPathEl.textContent);
@@ -248,6 +263,16 @@ selectRootButton.addEventListener("click", async () => {
     await refreshData();
     updateExtractDestHint();
   }
+});
+
+clearFiltersButton.addEventListener("click", () => {
+  selectedPrefix = null;
+  selectedGroup = null;
+  searchKeyword = "";
+  searchInputEl.value = "";
+  renderPrefixes();
+  renderGroups();
+  renderVersions();
 });
 
 refreshButton.addEventListener("click", async () => {
@@ -264,10 +289,7 @@ const setActiveTab = targetTab => {
     tab.classList.toggle("is-active", tab.dataset.tab === targetTab);
   });
   tabPanels.forEach(panel => {
-    panel.classList.toggle(
-      "active",
-      panel.id === `tab${targetTab[0].toUpperCase()}${targetTab.slice(1)}`
-    );
+    panel.classList.toggle("active", panel.id === `tab${targetTab[0].toUpperCase()}${targetTab.slice(1)}`);
   });
 };
 
@@ -275,6 +297,7 @@ tabs.forEach(tab => {
   tab.addEventListener("click", () => {
     setActiveTab(tab.dataset.tab);
     if (tab.dataset.tab === "extract") updateExtractDestHint();
+    if (tab.dataset.tab === "versions") refreshData();
   });
 });
 
@@ -285,7 +308,7 @@ versionInput.value = DEFAULT_VERSION;
 
 // 输入变化时持久化保存（防抖）
 sourceFolderInput.addEventListener("input", () => scheduleSave("sourceFolder", sourceFolderInput.value));
-versionInput.addEventListener("input",       () => scheduleSave("version",       versionInput.value));
+versionInput.addEventListener("input", () => scheduleSave("version", versionInput.value));
 
 sourceBrowseButton.addEventListener("click", async () => {
   const selected = await electronAPI.selectFolder(sourceFolderInput.value.trim());
@@ -294,7 +317,6 @@ sourceBrowseButton.addEventListener("click", async () => {
     electronAPI.storeSet("sourceFolder", selected);
   }
 });
-
 
 // ─── 日志追加工具（两个面板通用）─────────────────────────────────────────────
 const MAX_LOG_LINES = 500;
@@ -417,11 +439,11 @@ extractFolderInput.addEventListener("keydown", async event => {
 // 进度行格式: PROGRESS:当前百分比/100:描述文字
 electronAPI.onExtractLog(msg => {
   if (msg.startsWith("PROGRESS:")) {
-    const body     = msg.slice("PROGRESS:".length);
+    const body = msg.slice("PROGRESS:".length);
     const slashIdx = body.indexOf("/");
     const colonIdx = body.indexOf(":", slashIdx);
-    const pct      = parseInt(body.slice(0, slashIdx), 10);
-    const label    = colonIdx !== -1 ? body.slice(colonIdx + 1) : "";
+    const pct = parseInt(body.slice(0, slashIdx), 10);
+    const label = colonIdx !== -1 ? body.slice(colonIdx + 1) : "";
     setExtractProgress(pct, 100);
     // if (label) extractStatusEl.textContent = label;
   } else {
@@ -456,7 +478,10 @@ runExtractButton.addEventListener("click", async () => {
     });
     extractStatusEl.textContent = result.message || (result.success ? "解压完成" : "解压失败");
     extractStatusEl.classList.toggle("error", !result.success);
-    if (result.success) setExtractProgress(1, 1);
+    if (result.success) {
+      await refreshData();
+      setExtractProgress(1, 1);
+    }
   } catch (error) {
     extractStatusEl.textContent = "解压失败";
     extractStatusEl.classList.add("error");
@@ -473,7 +498,7 @@ runExtractButton.addEventListener("click", async () => {
 
   // 文件替换
   sourceFolderInput.value = stored.sourceFolder || DEFAULT_SOURCE_FOLDER;
-  versionInput.value      = stored.version       || DEFAULT_VERSION;
+  versionInput.value = stored.version || DEFAULT_VERSION;
 
   // 组态解压
   if (stored.extractFolder) {

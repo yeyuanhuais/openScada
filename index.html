@@ -25,7 +25,10 @@
           <button id="refresh" class="ghost">刷新</button>
         </header>
         <section class="panel">
-          <div class="group-label">版本筛选</div>
+          <div class="group-label">
+            版本筛选
+            <button id="clearFilters" class="ghost filter-clear-btn">清空筛选</button>
+          </div>
           <div class="filters">
             <div class="filter-row">
               <label class="filter-label" for="searchInput">关键词</label>
@@ -35,8 +38,11 @@
               <span class="filter-label">前缀</span>
               <div id="prefixFilters" class="prefix-filters"></div>
             </div>
+            <div class="filter-row">
+              <span class="filter-label">版本</span>
+              <div id="groupFilters" class="group-filters"></div>
+            </div>
           </div>
-          <div id="groupFilters" class="group-filters"></div>
         </section>
         <section class="panel">
           <div class="group-label">版本列表</div>
@@ -58,7 +64,7 @@
             <div class="field-row">
               <label for="versionInput">目标版本号</label>
               <input id="versionInput" type="text" />
-              <div class="field-hint">可在"版本列表"中点击"设为目标"快速填入。</div>
+              <div class="field-hint">可在"版本列表"中点击"替换"快速填入。</div>
             </div>
             <div class="field-actions">
               <button id="runReplace" class="primary">执行替换</button>
@@ -98,7 +104,7 @@
               <button id="runExtract" class="primary" disabled>执行解压</button>
               <span id="extractStatus" class="status-text"></span>
             </div>
-            <div class="progress-wrap" id="extractProgressWrap" style="display:none">
+            <div class="progress-wrap" id="extractProgressWrap" style="display: none">
               <div class="progress-bar-track">
                 <div class="progress-bar-fill" id="extractProgressFill"></div>
               </div>
