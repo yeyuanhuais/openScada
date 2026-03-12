@@ -5,7 +5,6 @@ const { spawn } = require("child_process");
 
 let store = null; // 通过动态 import() 初始化
 
-let mainPath = "";
 const EXECUTABLE_NAME = "scada.develop.exe";
 const PREFIXES = ["Scada", "Neutral", "JSCC", "Debug"];
 const DEFAULT_SOURCE_FOLDER = "\\\\192.168.11.3\\xxx\\xxx\\xxx\\3-固件打包\\v3.38\\feature\\HMIS-10657-趋势图改原生\\3.38.10657.22";
@@ -135,8 +134,7 @@ const ensureFolder = async folderPath => {
   await fs.mkdir(folderPath, { recursive: true });
 };
 
-const toTargetFolder = (baseFolder, relativeFolder) =>
-  path.join(baseFolder, ...relativeFolder.split(/[/\\]/));
+const toTargetFolder = (baseFolder, relativeFolder) => path.join(baseFolder, ...relativeFolder.split(/[/\\]/));
 
 // ─── 窗口 ────────────────────────────────────────────────────────────────────
 
@@ -158,9 +156,9 @@ app.whenReady().then(async () => {
   const { default: Store } = await import("electron-store");
   store = new Store({
     defaults: {
-      rootPath:      "",
-      sourceFolder:  DEFAULT_SOURCE_FOLDER,
-      version:       DEFAULT_VERSION,
+      rootPath: "",
+      sourceFolder: DEFAULT_SOURCE_FOLDER,
+      version: DEFAULT_VERSION,
       extractFolder: "",
     },
   });
@@ -179,9 +177,9 @@ app.on("window-all-closed", () => {
 
 // 读取所有持久化字段，供渲染进程初始化时回显
 ipcMain.handle("store-get-all", () => ({
-  rootPath:      store.get("rootPath"),
-  sourceFolder:  store.get("sourceFolder"),
-  version:       store.get("version"),
+  rootPath: store.get("rootPath"),
+  sourceFolder: store.get("sourceFolder"),
+  version: store.get("version"),
   extractFolder: store.get("extractFolder"),
 }));
 
@@ -191,7 +189,7 @@ ipcMain.handle("store-set", (_event, key, value) => {
 });
 
 // 打开目录对话框的公共函数，接受 defaultPath 参数
-const openDirDialog = async (defaultPath) => {
+const openDirDialog = async defaultPath => {
   const opts = { properties: ["openDirectory"] };
   // 如果传入了有效路径则作为初始目录
   if (defaultPath) {
@@ -258,8 +256,10 @@ ipcMain.handle("replace-firmware-files", async (event, payload) => {
   const parsedTarget = parseTargetVersion(payload?.version?.trim() || DEFAULT_VERSION, payload?.targetPrefix);
   const version = parsedTarget.version || DEFAULT_VERSION;
   const prefix = parsedTarget.prefix || "Scada";
+  store.set("version", version); // 将版本信息存储到持久化存储中，供下次回显
+  store.set("sourceFolder", sourceFolder); // 将版本信息存储到持久化存储中，供下次回显
 
-  const baseFolder = `${mainPath}\\${prefix}-v${version}\\HaiwellDir\\firmware`;
+  const baseFolder = `${store.get("rootPath")}\\${prefix}-v${version}\\HaiwellDir\\firmware`;
 
   // 每条日志立即推送给渲染进程
   const sendLog = msg => {
@@ -366,7 +366,11 @@ ipcMain.handle("extract-zip", async (event, payload) => {
   const { createWriteStream } = require("fs");
 
   const sendLog = msg => {
-    try { event.sender.send("extract-log", msg); } catch { /* 忽略 */ }
+    try {
+      event.sender.send("extract-log", msg);
+    } catch {
+      /* 忽略 */
+    }
   };
   const sendProgress = (pct, label) => {
     sendLog(`PROGRESS:${Math.round(pct)}/100:${label}`);
@@ -381,7 +385,7 @@ ipcMain.handle("extract-zip", async (event, payload) => {
     return { success: false, message: "未指定解压根目录。" };
   }
 
-  const zipName  = path.basename(zipPath, ".zip");
+  const zipName = path.basename(zipPath, ".zip");
   const destPath = path.join(targetRoot, zipName);
 
   sendLog(`源文件:   ${zipPath}`);
@@ -419,7 +423,9 @@ ipcMain.handle("extract-zip", async (event, payload) => {
           const dirPath = path.join(destPath, entry.fileName);
           try {
             await fs.mkdir(dirPath, { recursive: true });
-          } catch { /* 忽略已存在 */ }
+          } catch {
+            /* 忽略已存在 */
+          }
           done++;
           sendProgress((done / total) * 100, `${entry.fileName}`);
           zipfile.readEntry();
@@ -428,11 +434,13 @@ ipcMain.handle("extract-zip", async (event, payload) => {
 
         // 文件条目：先确保父目录存在，再流式写出
         const fileDest = path.join(destPath, entry.fileName);
-        const fileDir  = path.dirname(fileDest);
+        const fileDir = path.dirname(fileDest);
 
         try {
           await fs.mkdir(fileDir, { recursive: true });
-        } catch { /* 忽略 */ }
+        } catch {
+          /* 忽略 */
+        }
 
         zipfile.openReadStream(entry, (streamErr, readStream) => {
           if (streamErr) {
