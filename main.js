@@ -259,7 +259,7 @@ ipcMain.handle("replace-firmware-files", async (event, payload) => {
   store.set("version", version); // 将版本信息存储到持久化存储中，供下次回显
   store.set("sourceFolder", sourceFolder); // 将版本信息存储到持久化存储中，供下次回显
 
-  const baseFolder = `${store.get("rootPath")}\\${prefix}-v${version}\\HaiwellDir\\firmware`;
+  const baseFolder = `${store.get("rootPath")}\\${prefix}-v${version}\\${prefix}Dir\\firmware`;
 
   // 每条日志立即推送给渲染进程
   const sendLog = msg => {
