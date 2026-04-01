@@ -23,6 +23,7 @@
           <div class="path" id="rootPath">未选择路径</div>
           <button id="selectRoot" class="primary">选择路径</button>
           <button id="refresh" class="ghost">刷新</button>
+          <span id="versionStatus" class="status-text" aria-live="polite"></span>
         </header>
         <section class="panel">
           <div class="group-label">
@@ -118,6 +119,17 @@
         </section>
       </section>
     </main>
+
+    <div id="deleteConfirmModal" class="modal-backdrop" aria-hidden="true">
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="deleteModalTitle">
+        <h3 id="deleteModalTitle" class="modal-title">确认删除版本</h3>
+        <p id="deleteModalMessage" class="modal-message">删除后无法恢复。</p>
+        <div class="modal-actions">
+          <button id="deleteModalCancel" type="button" class="ghost">取消</button>
+          <button id="deleteModalConfirm" type="button" class="danger">确认删除</button>
+        </div>
+      </div>
+    </div>
 
     <script src="renderer.js"></script>
   </body>

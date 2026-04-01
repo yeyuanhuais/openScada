@@ -4,10 +4,16 @@ const groupFiltersEl = document.getElementById("groupFilters");
 const prefixFiltersEl = document.getElementById("prefixFilters");
 const versionListEl = document.getElementById("versionList");
 const searchInputEl = document.getElementById("searchInput");
+const versionStatusEl = document.getElementById("versionStatus");
 const selectRootButton = document.getElementById("selectRoot");
 const refreshButton = document.getElementById("refresh");
 const tabs = document.querySelectorAll(".tab");
 const tabPanels = document.querySelectorAll(".tab-panel");
+const brandEl = document.querySelector(".brand");
+const deleteConfirmModalEl = document.getElementById("deleteConfirmModal");
+const deleteModalMessageEl = document.getElementById("deleteModalMessage");
+const deleteModalCancelButton = document.getElementById("deleteModalCancel");
+const deleteModalConfirmButton = document.getElementById("deleteModalConfirm");
 
 // ─── 文件替换 DOM ─────────────────────────────────────────────────────────────
 const sourceFolderInput = document.getElementById("sourceFolderInput");
@@ -38,6 +44,7 @@ let selectedPrefix = null; // 单选：null 表示不限
 let searchKeyword = "";
 let selectedTargetPrefix = null;
 let selectedZipPath = null;
+let deleteModalResolver = null;
 
 const DEFAULT_SOURCE_FOLDER = "\\\\192.168.11.3\\xxx\\xxx\\xxx\\3-固件打包\\v3.38\\feature\\HMIS-10657-趋势图改原生\\3.38.10657.22";
 const DEFAULT_VERSION = "3.39.10657.1";
@@ -56,6 +63,37 @@ const prefixClassName = prefix => {
   if (normalized === "其他") return "other";
   return normalized.replace(/[^a-z0-9-]/g, "") || "other";
 };
+
+const closeDeleteConfirmModal = confirmed => {
+  deleteConfirmModalEl.classList.remove("is-open");
+  deleteConfirmModalEl.setAttribute("aria-hidden", "true");
+  if (deleteModalResolver) {
+    deleteModalResolver(confirmed);
+    deleteModalResolver = null;
+  }
+};
+
+const openDeleteConfirmModal = versionName => {
+  deleteModalMessageEl.textContent = `将永久删除 ${versionName} 对应目录，此操作不可恢复。`;
+  deleteConfirmModalEl.classList.add("is-open");
+  deleteConfirmModalEl.setAttribute("aria-hidden", "false");
+  deleteModalConfirmButton.focus();
+  return new Promise(resolve => {
+    deleteModalResolver = resolve;
+  });
+};
+
+deleteModalCancelButton.addEventListener("click", () => closeDeleteConfirmModal(false));
+deleteModalConfirmButton.addEventListener("click", () => closeDeleteConfirmModal(true));
+deleteConfirmModalEl.addEventListener("click", event => {
+  if (event.target === deleteConfirmModalEl) closeDeleteConfirmModal(false);
+});
+
+document.addEventListener("keydown", event => {
+  if (event.key === "Escape" && deleteConfirmModalEl.classList.contains("is-open")) {
+    closeDeleteConfirmModal(false);
+  }
+});
 
 // ─── 版本浏览渲染 ─────────────────────────────────────────────────────────────
 
@@ -204,10 +242,41 @@ const renderVersions = () => {
       setActiveTab("replace");
     });
 
+    const deleteButton = document.createElement("button");
+    deleteButton.className = "danger";
+    deleteButton.textContent = "删除";
+    deleteButton.addEventListener("click", async () => {
+      const targetName = item.label || item.folderPath || "该版本目录";
+      const confirmed = await openDeleteConfirmModal(targetName);
+      if (!confirmed) return;
+
+      deleteButton.disabled = true;
+      const originalDeleteText = deleteButton.textContent;
+      deleteButton.textContent = "删除中...";
+      versionStatusEl.textContent = "正在删除版本目录...";
+      versionStatusEl.classList.remove("error");
+
+      try {
+        const result = await electronAPI.deleteVersionFolder(item.folderPath);
+        versionStatusEl.textContent = result.message || (result.success ? "删除成功" : "删除失败");
+        versionStatusEl.classList.toggle("error", !result.success);
+        if (result.success) {
+          await refreshData();
+        }
+      } catch (error) {
+        versionStatusEl.textContent = `删除失败: ${error.message}`;
+        versionStatusEl.classList.add("error");
+      } finally {
+        deleteButton.textContent = originalDeleteText;
+        deleteButton.disabled = false;
+      }
+    });
+
     const actions = document.createElement("div");
     actions.className = "version-actions";
-    actions.appendChild(selectButton);
     actions.appendChild(openButton);
+    actions.appendChild(selectButton);
+    actions.appendChild(deleteButton);
 
     card.appendChild(meta);
     card.appendChild(actions);
@@ -495,6 +564,14 @@ runExtractButton.addEventListener("click", async () => {
 
 (async () => {
   const stored = await electronAPI.storeGetAll();
+
+  try {
+    const appVersion = await electronAPI.getAppVersion();
+    if (brandEl) {
+      brandEl.textContent = `v${appVersion}`;
+    }
+  } catch {
+  }
 
   // 文件替换
   sourceFolderInput.value = stored.sourceFolder || DEFAULT_SOURCE_FOLDER;

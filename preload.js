@@ -7,9 +7,11 @@ contextBridge.exposeInMainWorld("electronAPI", {
 
   // 版本浏览
   defaultRoot: () => ipcRenderer.invoke("default-root"),
+  getAppVersion: () => ipcRenderer.invoke("get-app-version"),
   scanRoot: rootDir => ipcRenderer.invoke("scan-root", rootDir),
   selectRoot: currentValue => ipcRenderer.invoke("select-root", currentValue),
   launchExe: exePath => ipcRenderer.invoke("launch-exe", exePath),
+  deleteVersionFolder: folderPath => ipcRenderer.invoke("delete-version-folder", folderPath),
 
   // 文件替换
   selectFolder: currentValue => ipcRenderer.invoke("select-folder", currentValue),

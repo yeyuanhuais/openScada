@@ -118,16 +118,26 @@ const scanRoot = async rootDir => {
     const group = groupFromVersion(version);
     const prefix = detectPrefix(`${entry.name}`);
     const label = version || entry.name;
-    const item = { label, version, group, prefix, exePath };
+    const item = { label, version, group, prefix, exePath, folderPath: entryPath };
     if (!groups.has(group)) groups.set(group, []);
     groups.get(group).push(item);
   }
+  const compareVersions = (v1, v2) => {
+    const parts1 = (v1 || "").split(".").map(Number);
+    const parts2 = (v2 || "").split(".").map(Number);
+    for (let i = 0; i < Math.max(parts1.length, parts2.length); i++) {
+      const p1 = parts1[i] || 0;
+      const p2 = parts2[i] || 0;
+      if (p1 !== p2) return p1 - p2;
+    }
+    return 0;
+  };
   return Array.from(groups.entries())
     .map(([group, items]) => ({
       group,
-      items: items.sort((a, b) => a.label.localeCompare(b.label, "zh-CN")),
+      items: items.sort((a, b) => compareVersions(a.version, b.version) || a.label.localeCompare(b.label, "zh-CN")),
     }))
-    .sort((a, b) => a.group.localeCompare(b.group, "zh-CN"));
+    .sort((a, b) => compareVersions(a.group, b.group) || a.group.localeCompare(b.group, "zh-CN"));
 };
 
 const ensureFolder = async folderPath => {
@@ -135,6 +145,30 @@ const ensureFolder = async folderPath => {
 };
 
 const toTargetFolder = (baseFolder, relativeFolder) => path.join(baseFolder, ...relativeFolder.split(/[/\\]/));
+
+const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+
+const deleteDirWithCmd = targetDir =>
+  new Promise(resolve => {
+    const proc = spawn("cmd", ["/c", "rd", "/s", "/q", targetDir], {
+      windowsHide: true,
+      stdio: "ignore",
+    });
+    proc.on("error", error => resolve({ ok: false, error }));
+    proc.on("close", async code => {
+      if (code === 0) {
+        resolve({ ok: true });
+        return;
+      }
+      try {
+        await fs.stat(targetDir);
+        resolve({ ok: false, error: new Error(`rd 退出码: ${code}`) });
+      } catch {
+        // 目录不存在也视为成功
+        resolve({ ok: true });
+      }
+    });
+  });
 
 // ─── 窗口 ────────────────────────────────────────────────────────────────────
 
@@ -228,6 +262,8 @@ ipcMain.handle("default-root", async () => {
   return path.dirname(app.getPath("exe"));
 });
 
+ipcMain.handle("get-app-version", () => app.getVersion());
+
 ipcMain.handle("scan-root", async (_event, rootDir) => {
   return scanRoot(rootDir || process.cwd());
 });
@@ -247,6 +283,41 @@ ipcMain.handle("launch-exe", async (_event, exePath) => {
     return true;
   } catch {
     return false;
+  }
+});
+
+ipcMain.handle("delete-version-folder", async (_event, folderPath) => {
+  if (!folderPath) {
+    return { success: false, message: "未提供要删除的目录。" };
+  }
+
+  try {
+    const stat = await fs.stat(folderPath);
+    if (!stat.isDirectory()) {
+      return { success: false, message: "目标路径不是目录。" };
+    }
+  } catch {
+    return { success: false, message: "目标目录不存在或无法访问。" };
+  }
+
+  try {
+    await fs.rm(folderPath, { recursive: true, force: true });
+    return { success: true, message: "删除成功。" };
+  } catch (error) {
+    // Windows 对部分目录(只读/占用/深层子目录)可能抛 ENOTEMPTY，回退到 rd /s /q 重试。
+    if (process.platform === "win32") {
+      let lastError = error;
+      for (let i = 0; i < 3; i += 1) {
+        const result = await deleteDirWithCmd(folderPath);
+        if (result.ok) {
+          return { success: true, message: "删除成功。" };
+        }
+        lastError = result.error || lastError;
+        await wait(200 * (i + 1));
+      }
+      return { success: false, message: `删除失败: ${lastError.message}` };
+    }
+    return { success: false, message: `删除失败: ${error.message}` };
   }
 });
 
