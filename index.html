@@ -26,22 +26,42 @@
           <span id="versionStatus" class="status-text" aria-live="polite"></span>
         </header>
         <section class="panel">
-          <div class="group-label">
-            版本筛选
-            <button id="clearFilters" class="ghost filter-clear-btn">清空筛选</button>
+          <div class="group-label filter-panel-header">
+            <div class="filter-panel-title">
+              <span>版本筛选</span>
+              <div class="filter-panel-actions">
+                <button id="toggleFilters" class="ghost filter-clear-btn" aria-expanded="true">收起筛选</button>
+                <button id="clearFilters" class="ghost filter-clear-btn">清空筛选</button>
+              </div>
+              <span id="filtersPreview" class="filters-preview">当前未设置筛选</span>
+            </div>
           </div>
-          <div class="filters">
-            <div class="filter-row">
-              <label class="filter-label" for="searchInput">关键词</label>
-              <input id="searchInput" class="search-input" type="text" placeholder="输入版本号或名称筛选" />
+          <div id="filtersPanel" class="filters-panel">
+            <div class="filters">
+              <div class="filter-row">
+                <label class="filter-label" for="searchInput">关键词</label>
+                <input id="searchInput" class="search-input" type="text" placeholder="输入版本号或名称筛选" />
+              </div>
+              <div class="filter-row">
+                <span class="filter-label">前缀</span>
+                <div id="prefixFilters" class="prefix-filters"></div>
+              </div>
+              <div class="filter-row">
+                <span class="filter-label">版本</span>
+                <div id="groupFilters" class="group-filters"></div>
+              </div>
             </div>
-            <div class="filter-row">
-              <span class="filter-label">前缀</span>
-              <div id="prefixFilters" class="prefix-filters"></div>
+            <div class="version-toolbar version-toolbar-inside">
+              <button id="toggleDeleteMode" class="ghost">开启删除</button>
+              <button id="removeOldVersions" class="danger" disabled>同版本仅保留最新</button>
+              <button id="deleteSelected" class="danger" disabled>删除已选</button>
+              <span id="deleteSelectionHint" class="toolbar-hint">开启删除后可多选版本。</span>
             </div>
-            <div class="filter-row">
-              <span class="filter-label">版本</span>
-              <div id="groupFilters" class="group-filters"></div>
+            <div class="progress-wrap progress-wrap-inline" id="deleteProgressWrap" style="display: none">
+              <div class="progress-bar-track">
+                <div class="progress-bar-fill progress-bar-danger" id="deleteProgressFill"></div>
+              </div>
+              <span class="progress-label" id="deleteProgressLabel">0%</span>
             </div>
           </div>
         </section>

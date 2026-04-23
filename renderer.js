@@ -5,6 +5,9 @@ const prefixFiltersEl = document.getElementById("prefixFilters");
 const versionListEl = document.getElementById("versionList");
 const searchInputEl = document.getElementById("searchInput");
 const versionStatusEl = document.getElementById("versionStatus");
+const filtersPanelEl = document.getElementById("filtersPanel");
+const filtersPreviewEl = document.getElementById("filtersPreview");
+const toggleFiltersButton = document.getElementById("toggleFilters");
 const selectRootButton = document.getElementById("selectRoot");
 const refreshButton = document.getElementById("refresh");
 const tabs = document.querySelectorAll(".tab");
@@ -14,6 +17,13 @@ const deleteConfirmModalEl = document.getElementById("deleteConfirmModal");
 const deleteModalMessageEl = document.getElementById("deleteModalMessage");
 const deleteModalCancelButton = document.getElementById("deleteModalCancel");
 const deleteModalConfirmButton = document.getElementById("deleteModalConfirm");
+const toggleDeleteModeButton = document.getElementById("toggleDeleteMode");
+const removeOldVersionsButton = document.getElementById("removeOldVersions");
+const deleteSelectedButton = document.getElementById("deleteSelected");
+const deleteSelectionHintEl = document.getElementById("deleteSelectionHint");
+const deleteProgressWrap = document.getElementById("deleteProgressWrap");
+const deleteProgressFill = document.getElementById("deleteProgressFill");
+const deleteProgressLabel = document.getElementById("deleteProgressLabel");
 
 // ─── 文件替换 DOM ─────────────────────────────────────────────────────────────
 const sourceFolderInput = document.getElementById("sourceFolderInput");
@@ -43,8 +53,12 @@ let selectedGroup = null; // 单选：null 表示不限
 let selectedPrefix = null; // 单选：null 表示不限
 let searchKeyword = "";
 let selectedTargetPrefix = null;
+let selectedTargetExePath = null;
 let selectedZipPath = null;
 let deleteModalResolver = null;
+let isDeleteMode = false;
+let deleteSelection = new Set();
+let areFiltersCollapsed = false;
 
 const DEFAULT_SOURCE_FOLDER = "\\\\192.168.11.3\\xxx\\xxx\\xxx\\3-固件打包\\v3.38\\feature\\HMIS-10657-趋势图改原生\\3.38.10657.22";
 const DEFAULT_VERSION = "3.39.10657.1";
@@ -57,11 +71,194 @@ const scheduleSave = (key, value) => {
   saveTimers[key] = setTimeout(() => electronAPI.storeSet(key, value), SAVE_DELAY);
 };
 
+const saveVersionFilters = () => {
+  scheduleSave("versionSearchKeyword", searchKeyword);
+  scheduleSave("versionSelectedPrefix", selectedPrefix || "");
+  scheduleSave("versionSelectedGroup", selectedGroup || "");
+  scheduleSave("versionFiltersCollapsed", areFiltersCollapsed);
+};
+
 const PREFIX_ORDER = ["Scada", "Neutral", "JSCC", "其他"];
+const compareVersionStrings = (left, right) => {
+  const leftParts = String(left || "")
+    .split(".")
+    .map(part => Number(part) || 0);
+  const rightParts = String(right || "")
+    .split(".")
+    .map(part => Number(part) || 0);
+
+  for (let index = 0; index < Math.max(leftParts.length, rightParts.length); index += 1) {
+    const leftPart = leftParts[index] || 0;
+    const rightPart = rightParts[index] || 0;
+    if (leftPart !== rightPart) return leftPart - rightPart;
+  }
+
+  return 0;
+};
+
 const prefixClassName = prefix => {
   const normalized = (prefix || "其他").toLowerCase();
   if (normalized === "其他") return "other";
   return normalized.replace(/[^a-z0-9-]/g, "") || "other";
+};
+
+const updateFiltersPreview = () => {
+  const previewParts = [];
+
+  if (selectedPrefix) {
+    previewParts.push(`前缀: ${selectedPrefix}`);
+  }
+  if (selectedGroup) {
+    previewParts.push(`版本: ${selectedGroup}`);
+  }
+  if (searchKeyword.trim()) {
+    previewParts.push(`关键词: ${searchKeyword.trim()}`);
+  }
+
+  filtersPreviewEl.textContent = previewParts.length > 0 ? previewParts.join(" / ") : "当前未设置筛选";
+  filtersPreviewEl.classList.toggle("is-visible", areFiltersCollapsed);
+};
+
+const updateFiltersCollapseState = () => {
+  filtersPanelEl.classList.toggle("is-collapsed", areFiltersCollapsed);
+  toggleFiltersButton.textContent = areFiltersCollapsed ? "展开筛选" : "收起筛选";
+  toggleFiltersButton.setAttribute("aria-expanded", String(!areFiltersCollapsed));
+  updateFiltersPreview();
+};
+
+const setDeleteProgress = (current, total) => {
+  const pct = total > 0 ? Math.round((current / total) * 100) : 0;
+  deleteProgressFill.style.width = `${pct}%`;
+  deleteProgressLabel.textContent = `${pct}%  (${current} / ${total})`;
+};
+
+const updateDeleteControls = () => {
+  const selectedCount = deleteSelection.size;
+  toggleDeleteModeButton.textContent = isDeleteMode ? "关闭删除" : "开启删除";
+  deleteSelectionHintEl.textContent = isDeleteMode
+    ? `已进入删除模式，当前选中 ${selectedCount} 项。`
+    : "开启删除后可多选版本。";
+  removeOldVersionsButton.disabled = !isDeleteMode;
+  deleteSelectedButton.disabled = !isDeleteMode || selectedCount === 0;
+};
+
+const exitDeleteMode = () => {
+  isDeleteMode = false;
+  deleteSelection = new Set();
+  deleteProgressWrap.style.display = "none";
+  setDeleteProgress(0, 0);
+  updateDeleteControls();
+};
+
+const getFilteredItems = () => {
+  const keyword = searchKeyword.trim().toLowerCase();
+  let items = groupedData.flatMap(group => group.items);
+
+  if (selectedPrefix !== null) {
+    items = items.filter(item => (item.prefix || "其他") === selectedPrefix);
+  }
+  if (selectedGroup !== null) {
+    items = items.filter(item => item.group === selectedGroup);
+  }
+  if (keyword) {
+    items = items.filter(item => {
+      const haystack = `${item.label} ${item.version || ""} ${item.group} ${item.prefix || ""}`.toLowerCase();
+      return haystack.includes(keyword);
+    });
+  }
+
+  return items;
+};
+
+const toggleDeleteSelection = folderPath => {
+  if (!folderPath) return;
+
+  if (deleteSelection.has(folderPath)) {
+    deleteSelection.delete(folderPath);
+  } else {
+    deleteSelection.add(folderPath);
+  }
+
+  updateDeleteControls();
+  renderVersions();
+};
+
+const collectOldVersionCandidates = items => {
+  const versionBuckets = new Map();
+
+  items.forEach(item => {
+    const versionParts = String(item.version || "").split(".");
+    if (versionParts.length < 4) return;
+
+    const familyKey = `${item.prefix || "其他"}:${versionParts.slice(0, 3).join(".")}`;
+    if (!versionBuckets.has(familyKey)) {
+      versionBuckets.set(familyKey, []);
+    }
+    versionBuckets.get(familyKey).push(item);
+  });
+
+  const candidates = [];
+  versionBuckets.forEach(bucketItems => {
+    if (bucketItems.length < 2) return;
+
+    const sortedItems = [...bucketItems].sort((left, right) => compareVersionStrings(left.version, right.version));
+    candidates.push(...sortedItems.slice(0, -1));
+  });
+
+  return candidates;
+};
+
+const runDeleteBatch = async ({ items, actionLabel }) => {
+  if (items.length === 0) {
+    versionStatusEl.textContent = `${actionLabel}没有可删除的版本。`;
+    versionStatusEl.classList.remove("error");
+    return;
+  }
+
+  const versionList = items.map(item => `- ${item.label || item.version || item.folderPath}`).join("\n");
+  const confirmed = await openDeleteConfirmModal(
+    `将永久删除 ${actionLabel}${items.length} 个版本目录，此操作不可恢复。\n${versionList}`
+  );
+  if (!confirmed) return;
+
+  deleteProgressWrap.style.display = "flex";
+  setDeleteProgress(0, items.length);
+  versionStatusEl.textContent = `${actionLabel}中...`;
+  versionStatusEl.classList.remove("error");
+  toggleDeleteModeButton.disabled = true;
+  removeOldVersionsButton.disabled = true;
+  deleteSelectedButton.disabled = true;
+
+  let successCount = 0;
+  const failedItems = [];
+
+  for (let index = 0; index < items.length; index += 1) {
+    const item = items[index];
+    try {
+      const result = await electronAPI.deleteVersionFolder(item.folderPath);
+      if (result.success) {
+        successCount += 1;
+      } else {
+        failedItems.push(`${item.label || item.folderPath}: ${result.message}`);
+      }
+    } catch (error) {
+      failedItems.push(`${item.label || item.folderPath}: ${error.message}`);
+    }
+    setDeleteProgress(index + 1, items.length);
+  }
+
+  if (failedItems.length > 0) {
+    versionStatusEl.textContent = `${actionLabel}完成，成功 ${successCount} 项，失败 ${failedItems.length} 项。`;
+    versionStatusEl.classList.add("error");
+  } else {
+    versionStatusEl.textContent = `${actionLabel}完成，共删除 ${successCount} 项。`;
+    versionStatusEl.classList.remove("error");
+  }
+
+  deleteSelection = new Set();
+  await refreshData();
+  toggleDeleteModeButton.disabled = false;
+  updateDeleteControls();
 };
 
 const closeDeleteConfirmModal = confirmed => {
@@ -73,8 +270,8 @@ const closeDeleteConfirmModal = confirmed => {
   }
 };
 
-const openDeleteConfirmModal = versionName => {
-  deleteModalMessageEl.textContent = `将永久删除 ${versionName} 对应目录，此操作不可恢复。`;
+const openDeleteConfirmModal = message => {
+  deleteModalMessageEl.textContent = message;
   deleteConfirmModalEl.classList.add("is-open");
   deleteConfirmModalEl.setAttribute("aria-hidden", "false");
   deleteModalConfirmButton.focus();
@@ -113,6 +310,7 @@ const renderGroups = () => {
     radio.checked = selectedGroup === group.group;
     radio.addEventListener("change", () => {
       selectedGroup = group.group;
+      saveVersionFilters();
       renderVersions();
     });
 
@@ -158,6 +356,7 @@ const renderPrefixes = () => {
       selectedPrefix = prefix;
       // 切换前缀时重置版本组选择
       selectedGroup = null;
+      saveVersionFilters();
       renderGroups();
       renderVersions();
     });
@@ -173,23 +372,15 @@ const renderPrefixes = () => {
 
 const renderVersions = () => {
   versionListEl.innerHTML = "";
-  const keyword = searchKeyword.trim().toLowerCase();
+  const items = getFilteredItems();
 
-  // 先按前缀过滤，再按版本组过滤
-  let items = groupedData.flatMap(group => group.items);
-
-  if (selectedPrefix !== null) {
-    items = items.filter(item => (item.prefix || "其他") === selectedPrefix);
-  }
-  if (selectedGroup !== null) {
-    items = items.filter(item => item.group === selectedGroup);
-  }
-  if (keyword) {
-    items = items.filter(item => {
-      const haystack = `${item.label} ${item.version || ""} ${item.group} ${item.prefix || ""}`.toLowerCase();
-      return haystack.includes(keyword);
-    });
-  }
+  deleteSelection.forEach(folderPath => {
+    const exists = items.some(item => item.folderPath === folderPath);
+    if (!exists) {
+      deleteSelection.delete(folderPath);
+    }
+  });
+  updateDeleteControls();
 
   if (items.length === 0) {
     versionListEl.innerHTML = '<div class="empty">暂无匹配结果</div>';
@@ -199,6 +390,25 @@ const renderVersions = () => {
   items.forEach(item => {
     const card = document.createElement("div");
     card.className = "version-item";
+    if (isDeleteMode) card.classList.add("delete-mode");
+    if (deleteSelection.has(item.folderPath)) card.classList.add("is-selected");
+
+    if (isDeleteMode) {
+      const checkboxLabel = document.createElement("label");
+      checkboxLabel.className = "version-select";
+
+      const checkbox = document.createElement("input");
+      checkbox.type = "checkbox";
+      checkbox.checked = deleteSelection.has(item.folderPath);
+      checkbox.addEventListener("change", () => toggleDeleteSelection(item.folderPath));
+
+      const checkboxText = document.createElement("span");
+      checkboxText.textContent = "删除";
+
+      checkboxLabel.appendChild(checkbox);
+      checkboxLabel.appendChild(checkboxText);
+      card.appendChild(checkboxLabel);
+    }
 
     const prefixLabel = item.prefix || "其他";
     const prefix = document.createElement("span");
@@ -237,46 +447,16 @@ const renderVersions = () => {
       const targetVersion = item.version || item.label;
       versionInput.value = targetVersion;
       selectedTargetPrefix = item.prefix || null;
+      selectedTargetExePath = item.exePath || null;
       replaceStatusEl.textContent = `已选择目标版本：${targetVersion}`;
       replaceStatusEl.classList.remove("error");
       setActiveTab("replace");
-    });
-
-    const deleteButton = document.createElement("button");
-    deleteButton.className = "danger";
-    deleteButton.textContent = "删除";
-    deleteButton.addEventListener("click", async () => {
-      const targetName = item.label || item.folderPath || "该版本目录";
-      const confirmed = await openDeleteConfirmModal(targetName);
-      if (!confirmed) return;
-
-      deleteButton.disabled = true;
-      const originalDeleteText = deleteButton.textContent;
-      deleteButton.textContent = "删除中...";
-      versionStatusEl.textContent = "正在删除版本目录...";
-      versionStatusEl.classList.remove("error");
-
-      try {
-        const result = await electronAPI.deleteVersionFolder(item.folderPath);
-        versionStatusEl.textContent = result.message || (result.success ? "删除成功" : "删除失败");
-        versionStatusEl.classList.toggle("error", !result.success);
-        if (result.success) {
-          await refreshData();
-        }
-      } catch (error) {
-        versionStatusEl.textContent = `删除失败: ${error.message}`;
-        versionStatusEl.classList.add("error");
-      } finally {
-        deleteButton.textContent = originalDeleteText;
-        deleteButton.disabled = false;
-      }
     });
 
     const actions = document.createElement("div");
     actions.className = "version-actions";
     actions.appendChild(openButton);
     actions.appendChild(selectButton);
-    actions.appendChild(deleteButton);
 
     card.appendChild(meta);
     card.appendChild(actions);
@@ -309,10 +489,31 @@ const refreshData = async () => {
     currentRoot = stored.rootPath || (await electronAPI.defaultRoot());
     rootPathEl.textContent = currentRoot;
   }
+
   groupedData = await electronAPI.scanRoot(currentRoot);
-  // 单选模式：刷新后重置为不限
-  selectedGroup = null;
-  selectedPrefix = null;
+
+  const availablePrefixes = new Set();
+  const availableGroups = new Set();
+  groupedData.forEach(group => {
+    availableGroups.add(group.group);
+    group.items.forEach(item => availablePrefixes.add(item.prefix || "其他"));
+  });
+
+  let filtersChanged = false;
+  if (selectedPrefix !== null && !availablePrefixes.has(selectedPrefix)) {
+    selectedPrefix = null;
+    filtersChanged = true;
+  }
+  if (selectedGroup !== null && !availableGroups.has(selectedGroup)) {
+    selectedGroup = null;
+    filtersChanged = true;
+  }
+
+  if (filtersChanged) {
+    saveVersionFilters();
+  }
+
+  updateFiltersPreview();
   renderGroups();
   renderPrefixes();
   renderVersions();
@@ -339,6 +540,8 @@ clearFiltersButton.addEventListener("click", () => {
   selectedGroup = null;
   searchKeyword = "";
   searchInputEl.value = "";
+  saveVersionFilters();
+  updateFiltersPreview();
   renderPrefixes();
   renderGroups();
   renderVersions();
@@ -348,8 +551,45 @@ refreshButton.addEventListener("click", async () => {
   await refreshData();
 });
 
+toggleFiltersButton.addEventListener("click", () => {
+  areFiltersCollapsed = !areFiltersCollapsed;
+  scheduleSave("versionFiltersCollapsed", areFiltersCollapsed);
+  updateFiltersCollapseState();
+});
+
+toggleDeleteModeButton.addEventListener("click", () => {
+  if (isDeleteMode) {
+    exitDeleteMode();
+  } else {
+    isDeleteMode = true;
+    deleteSelection = new Set();
+    versionStatusEl.textContent = "已开启删除模式。";
+    versionStatusEl.classList.remove("error");
+    updateDeleteControls();
+  }
+  renderVersions();
+});
+
+removeOldVersionsButton.addEventListener("click", async () => {
+  const candidates = collectOldVersionCandidates(getFilteredItems());
+  await runDeleteBatch({
+    items: candidates,
+    actionLabel: "同版本旧版本删除",
+  });
+});
+
+deleteSelectedButton.addEventListener("click", async () => {
+  const selectedItems = getFilteredItems().filter(item => deleteSelection.has(item.folderPath));
+  await runDeleteBatch({
+    items: selectedItems,
+    actionLabel: "批量删除",
+  });
+});
+
 searchInputEl.addEventListener("input", event => {
   searchKeyword = event.target.value || "";
+  saveVersionFilters();
+  updateFiltersPreview();
   renderVersions();
 });
 
@@ -419,6 +659,7 @@ runReplaceButton.addEventListener("click", async () => {
       sourceFolder,
       version,
       targetPrefix: selectedTargetPrefix,
+      exePath: selectedTargetExePath,
     });
     replaceStatusEl.textContent = result.message || (result.success ? "执行完成" : "执行失败");
     replaceStatusEl.classList.toggle("error", !result.success);
@@ -577,6 +818,13 @@ runExtractButton.addEventListener("click", async () => {
   sourceFolderInput.value = stored.sourceFolder || DEFAULT_SOURCE_FOLDER;
   versionInput.value = stored.version || DEFAULT_VERSION;
 
+  // 版本筛选
+  searchKeyword = stored.versionSearchKeyword || "";
+  selectedPrefix = stored.versionSelectedPrefix || null;
+  selectedGroup = stored.versionSelectedGroup || null;
+  areFiltersCollapsed = Boolean(stored.versionFiltersCollapsed);
+  searchInputEl.value = searchKeyword;
+
   // 组态解压
   if (stored.extractFolder) {
     extractFolderInput.value = stored.extractFolder;
@@ -587,6 +835,10 @@ runExtractButton.addEventListener("click", async () => {
     currentRoot = stored.rootPath;
     rootPathEl.textContent = stored.rootPath;
   }
+
+  updateFiltersPreview();
+  updateFiltersCollapseState();
+  updateDeleteControls();
 
   await refreshData();
 
